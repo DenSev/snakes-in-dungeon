@@ -23,7 +23,7 @@ FOV_LIGHT_WALLS = True
 TORCH_RADIUS = 10
 
 #############################################
-
+MAX_ROOM_MONSTERS = 3
 
 player_x = 25
 player_y = 23
@@ -50,15 +50,17 @@ class Rect:
 
 class Object:
 
-    def __init__(self, x, y, char, color):
+    def __init__(self, x, y, char, name, color, blocks=False):
         self.x = x
         self.y = y
         self.char = char
         self.color = color
+        self.name = name
+        self.blocks = blocks
 
     def move(self, dx, dy):
         # move by the given amount, if the destination is not blocked
-        if not map[self.x + dx][self.y + dy].blocked:
+        if not is_blocked(self.x + dx, self.y + dy):
             self.x += dx
             self.y += dy
 
@@ -151,6 +153,7 @@ def make_map():
                     create_h_tunnel(prev_x, new_x, new_y)
 
             # finally, append the new room to the list
+            place_objects(new_room)
             rooms.append(new_room)
             num_rooms += 1
 
@@ -241,9 +244,43 @@ def handle_keys():
         fov_recompute = True
 
 
-player = Object(player_x, player_y, '@', libtcod.white)
-npc = Object(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', libtcod.yellow)
-objects = [npc, player]
+def place_objects(room):
+    # choose random number of monsters
+    num_monsters = libtcod.random_get_int(0, 0, MAX_ROOM_MONSTERS)
+
+    for i in range(num_monsters):
+        # choose random spot for this monster
+        x = libtcod.random_get_int(0, room.x1, room.x2)
+        y = libtcod.random_get_int(0, room.y1, room.y2)
+
+        if libtcod.random_get_int(0, 0, 100) < 80:  # 80% chance of getting an orc
+            # create an orc
+            monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green, blocks=True)
+        else:
+            # create a troll
+            monster = Object(x, y, 'T', 'troll', libtcod.darker_green, blocks=True)
+
+        # only place it if the tile is not blocked
+        if not is_blocked(x, y):
+            objects.append(monster)
+
+
+def is_blocked(x, y):
+    # first test the map tile
+    if map[x][y].blocked:
+        return True
+
+    # now check for any blocking objects
+    for object in objects:
+        if object.blocks and object.x == x and object.y == y:
+            return True
+
+    return False
+
+
+player = Object(player_x, player_y, '@', "pc", libtcod.white, True)
+# npc = Object(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', "npc", libtcod.yellow, True)
+objects = [player]
 
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
 libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
