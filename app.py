@@ -1,3 +1,4 @@
+from __future__ import print_function
 import libtcodpy as libtcod
 
 #############################################
@@ -27,6 +28,9 @@ MAX_ROOM_MONSTERS = 3
 
 player_x = 25
 player_y = 23
+#############################################
+game_state = 'playing'
+player_action = None
 
 
 class Rect:
@@ -224,24 +228,24 @@ def handle_keys():
         libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
 
     elif key.vk == libtcod.KEY_ESCAPE:
-        return True  # exit game
+        return 'exit'  # exit game
 
-    # movement keys
-    if libtcod.console_is_key_pressed(libtcod.KEY_UP):
-        player.move(0, -1)
-        fov_recompute = True
+    if game_state == 'playing':
+        # movement keys
+        if libtcod.console_is_key_pressed(libtcod.KEY_UP):
+            player_move_or_attack(0, -1)
 
-    elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
-        player.move(0, 1)
-        fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
+            player_move_or_attack(0, 1)
 
-    elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
-        player.move(-1, 0)
-        fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
+            player_move_or_attack(-1, 0)
 
-    elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
-        player.move(1, 0)
-        fov_recompute = True
+        elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
+            player_move_or_attack(1, 0)
+
+    else:
+        return 'didnt-take-turn'
 
 
 def place_objects(room):
@@ -278,6 +282,28 @@ def is_blocked(x, y):
     return False
 
 
+def player_move_or_attack(dx, dy):
+    global fov_recompute
+
+    # the coordinates the player is moving to/attacking
+    x = player.x + dx
+    y = player.y + dy
+
+    # try to find an attackable object there
+    target = None
+    for object in objects:
+        if object.x == x and object.y == y:
+            target = object
+            break
+
+    # attack if target found, move otherwise
+    if target is not None:
+        print ('The ' + target.name + ' laughs at your puny efforts to attack him!')
+    else:
+        player.move(dx, dy)
+        fov_recompute = True
+
+
 player = Object(player_x, player_y, '@', "pc", libtcod.white, True)
 # npc = Object(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', "npc", libtcod.yellow, True)
 objects = [player]
@@ -306,6 +332,12 @@ while not libtcod.console_is_window_closed():
         obj.clear()
 
     # handle keys and exit game if needed
-    shutdown = handle_keys()
-    if shutdown:
+    player_action = handle_keys()
+    if player_action == 'exit':
         break
+
+    # let monsters take their turn
+    if game_state == 'playing' and player_action != 'didnt-take-turn':
+        for obj in objects:
+            if obj != player:
+                print('The ' + obj.name + ' growls!')
