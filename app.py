@@ -155,10 +155,17 @@ def render_all():
 
     # draw all objects in the list
     for object in objects:
-        object.draw(fov_map, con)
+        if object != player:
+            object.draw(fov_map, con)
+    player.draw(fov_map, con)
 
     # blit the contents of con to the root console and present it
     libtcod.console_blit(con, 0, 0, g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 0, 0, 0)
+
+    # show the player's stats
+    libtcod.console_set_default_foreground(con, libtcod.white)
+    libtcod.console_print_ex(con, 1, g.SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT,
+                             'HP: ' + str(player.fighter.hp) + '/' + str(player.fighter.max_hp))
 
 
 def handle_keys():
@@ -189,8 +196,8 @@ def handle_keys():
         elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
             player_move_or_attack(1, 0)
 
-    else:
-        return 'didnt-take-turn'
+        else:
+            return 'didnt-take-turn'
 
 
 def place_objects(room):
@@ -204,14 +211,14 @@ def place_objects(room):
 
         if libtcod.random_get_int(0, 0, 100) < 80:  # 80% chance of getting an orc
             # create an orc
-            orc_fighter_component = o.Fighter(hp=10, defense=0, power=3)
+            orc_fighter_component = o.Fighter(hp=10, defense=0, power=3, death_function=o.monster_death)
             ai_component = o.BasicMonster()
 
             monster = o.Object(x, y, 'o', 'orc', libtcod.desaturated_green,
                                blocks=True, fighter=orc_fighter_component, ai=ai_component)
         else:
             # create a troll
-            troll_fighter_component = o.Fighter(hp=16, defense=1, power=4)
+            troll_fighter_component = o.Fighter(hp=16, defense=1, power=4, death_function=o.monster_death)
             ai_component = o.BasicMonster()
 
             monster = o.Object(x, y, 'T', 'troll', libtcod.darker_green,
@@ -232,19 +239,29 @@ def player_move_or_attack(dx, dy):
     # try to find an attackable object there
     target = None
     for object in objects:
-        if object.x == x and object.y == y:
+        if object.fighter and object.x == x and object.y == y:
             target = object
             break
 
     # attack if target found, move otherwise
     if target is not None:
-        print ('The ' + target.name + ' laughs at your puny efforts to attack him!')
+        player.fighter.attack(target, objects)
     else:
         player.move(dx, dy, map, objects)
         fov_recompute = True
 
 
-fighter_component = o.Fighter(hp=30, defense=2, power=5)
+def player_death(player, objects):
+    # the game ended!
+    print ('You died!')
+    g.game_state = 'dead'
+
+    # for added effect, transform the player into a corpse!
+    player.char = '%'
+    player.color = libtcod.dark_red
+
+
+fighter_component = o.Fighter(hp=30, defense=2, power=5, death_function=player_death)
 player = o.Object(0, 0, '@', 'player', libtcod.white, blocks=True, fighter=fighter_component)
 # npc = Object(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', "npc", libtcod.yellow, True)
 objects = [player]
@@ -281,4 +298,4 @@ while not libtcod.console_is_window_closed():
     if g.game_state == 'playing' and player_action != 'didnt-take-turn':
         for obj in objects:
             if obj.ai:
-                obj.ai.take_turn(fov_map, player)
+                obj.ai.take_turn(fov_map, player, map, objects)

@@ -1,15 +1,36 @@
-from __future__ import print_function
 import libtcodpy as libtcod
 import math
 
 
 class Fighter:
     # combat-related properties and methods (monster, player, NPC).
-    def __init__(self, hp, defense, power):
+    def __init__(self, hp, defense, power, death_function=None):
+        self.death_function = death_function
         self.max_hp = hp
         self.hp = hp
         self.defense = defense
         self.power = power
+
+    def take_damage(self, damage, objects):
+        # apply damage if possible
+        if damage > 0:
+            self.hp -= damage
+            # check for death. if there's a death function, call it
+            if self.hp <= 0:
+                function = self.death_function
+                if function is not None:
+                    function(self.owner, objects)
+
+    def attack(self, target, objects):
+        # a simple formula for attack damage
+        damage = self.power - target.fighter.defense
+
+        if damage > 0:
+            # make the target take some damage
+            print(self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage) + ' hit points.')
+            target.fighter.take_damage(damage, objects)
+        else:
+            print(self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!')
 
 
 class BasicMonster:
@@ -18,18 +39,18 @@ class BasicMonster:
         print("whatever")
 
     # AI for a basic monster.
-    def take_turn(self, fov_map, player):
+    def take_turn(self, fov_map, player, map, objects):
         # a basic monster takes its turn. If you can see it, it can see you
         monster = self.owner
         if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
 
             # move towards player if far away
             if monster.distance_to(player) >= 2:
-                monster.move_towards(player.x, player.y)
+                monster.move_towards(player.x, player.y, map, objects)
 
             # close enough, attack! (if the player is still alive.)
             elif player.fighter.hp > 0:
-                print('The attack of the ' + monster.name + ' bounces off your shiny metal armor!')
+                monster.fighter.attack(player, objects)
 
 
 class Object:
@@ -48,7 +69,12 @@ class Object:
         if self.ai:  # let the AI component know who owns it
             self.ai.owner = self
 
-    def move_towards(self, target_x, target_y):
+    def send_to_back(self, objects):
+        # make this object be drawn first, so all others appear above it if they're in the same tile.
+        objects.remove(self)
+        objects.insert(0, self)
+
+    def move_towards(self, target_x, target_y, map, objects):
         # vector from this object to the target, and distance
         dx = target_x - self.x
         dy = target_y - self.y
@@ -58,7 +84,7 @@ class Object:
         # convert to integer so the movement is restricted to the map grid
         dx = int(round(dx / distance))
         dy = int(round(dy / distance))
-        self.move(dx, dy)
+        self.move(dx, dy, map, objects)
 
     def move(self, dx, dy, map, objects):
         # move by the given amount, if the destination is not blocked
@@ -92,3 +118,16 @@ def is_blocked(x, y, map, objects):
             return True
 
     return False
+
+
+def monster_death(monster, objects):
+    # transform it into a nasty corpse! it doesn't block, can't be
+    # attacked and doesn't move
+    print(monster.name.capitalize() + ' is dead!')
+    monster.char = '%'
+    monster.color = libtcod.dark_red
+    monster.blocks = False
+    monster.fighter = None
+    monster.ai = None
+    monster.name = 'remains of ' + monster.name
+    monster.send_to_back(objects)
