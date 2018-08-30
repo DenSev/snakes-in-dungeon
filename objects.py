@@ -2,6 +2,31 @@ import libtcodpy as libtcod
 import math
 import globals as g
 
+
+class Item:
+
+    def __init__(self, use_function=None):
+        self.use_function = use_function
+
+    # an item that can be picked up and used.
+    def pick_up(self, objects):
+        # add to the player's inventory and remove from the map
+        if len(g.inventory) >= 26:
+            g.message('Your inventory is full, cannot pick up ' + self.owner.name + '.', libtcod.red)
+        else:
+            g.inventory.append(self.owner)
+            objects.remove(self.owner)
+            g.message('You picked up a ' + self.owner.name + '!', libtcod.green)
+
+    def use(self):
+        # just call the "use_function" if it is defined
+        if self.use_function is None:
+            g.message('The ' + self.owner.name + ' cannot be used.')
+        else:
+            if self.use_function() != 'cancelled':
+                g.inventory.remove(self.owner)  # destroy after use, unless it was cancelled for some reason
+
+
 class Fighter:
     # combat-related properties and methods (monster, player, NPC).
     def __init__(self, hp, defense, power, death_function=None):
@@ -20,6 +45,12 @@ class Fighter:
                 function = self.death_function
                 if function is not None:
                     function(self.owner, objects)
+
+    def heal(self, amount):
+        # heal by the given amount, without going over the maximum
+        self.hp += amount
+        if self.hp > self.max_hp:
+            self.hp = self.max_hp
 
     def attack(self, target, objects):
         # a simple formula for attack damage
@@ -55,7 +86,7 @@ class BasicMonster:
 
 class Object:
 
-    def __init__(self, x, y, char, name, color, blocks=False, fighter=None, ai=None):
+    def __init__(self, x, y, char, name, color, blocks=False, fighter=None, ai=None, item=None):
         self.x = x
         self.y = y
         self.char = char
@@ -68,6 +99,9 @@ class Object:
         self.ai = ai
         if self.ai:  # let the AI component know who owns it
             self.ai.owner = self
+        self.item = item
+        if self.item:  # let the Item component know who owns it
+            self.item.owner = self
 
     def send_to_back(self, objects):
         # make this object be drawn first, so all others appear above it if they're in the same tile.
