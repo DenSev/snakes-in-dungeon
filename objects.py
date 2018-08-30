@@ -1,6 +1,6 @@
 import libtcodpy as libtcod
 import math
-
+import globals as g
 
 class Fighter:
     # combat-related properties and methods (monster, player, NPC).
@@ -27,10 +27,10 @@ class Fighter:
 
         if damage > 0:
             # make the target take some damage
-            print(self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage) + ' hit points.')
+            g.message(self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage) + ' hit points.')
             target.fighter.take_damage(damage, objects)
         else:
-            print(self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!')
+            g.message(self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!')
 
 
 class BasicMonster:
@@ -123,7 +123,7 @@ def is_blocked(x, y, map, objects):
 def monster_death(monster, objects):
     # transform it into a nasty corpse! it doesn't block, can't be
     # attacked and doesn't move
-    print(monster.name.capitalize() + ' is dead!')
+    g.message(monster.name.capitalize() + ' is dead!')
     monster.char = '%'
     monster.color = libtcod.dark_red
     monster.blocks = False

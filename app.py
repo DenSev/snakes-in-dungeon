@@ -1,4 +1,5 @@
 import libtcodpy as libtcod
+import textwrap
 import objects as o
 import globals as g
 
@@ -162,10 +163,24 @@ def render_all():
     # blit the contents of con to the root console and present it
     libtcod.console_blit(con, 0, 0, g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 0, 0, 0)
 
+    # prepare to render the GUI panel
+    libtcod.console_set_default_background(g.panel, libtcod.black)
+    libtcod.console_clear(g.panel)
+
+
+    # print the game messages, one line at a time
+    y = 1
+    for (line, color) in g.game_msgs:
+        libtcod.console_set_default_foreground(g.panel, color)
+        libtcod.console_print_ex(g.panel, g.MSG_X, y, libtcod.BKGND_NONE, libtcod.LEFT, line)
+        y += 1
+
     # show the player's stats
-    libtcod.console_set_default_foreground(con, libtcod.white)
-    libtcod.console_print_ex(con, 1, g.SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.LEFT,
-                             'HP: ' + str(player.fighter.hp) + '/' + str(player.fighter.max_hp))
+    render_bar(1, 1, g.BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp,
+               libtcod.light_red, libtcod.darker_red)
+
+    # blit the contents of "panel" to the root console
+    libtcod.console_blit(g.panel, 0, 0, g.SCREEN_WIDTH, g.PANEL_HEIGHT, 0, 0, g.PANEL_Y)
 
 
 def handle_keys():
@@ -253,12 +268,34 @@ def player_move_or_attack(dx, dy):
 
 def player_death(player, objects):
     # the game ended!
-    print ('You died!')
+    g.message ('You died!', libtcod.red)
     g.game_state = 'dead'
 
     # for added effect, transform the player into a corpse!
     player.char = '%'
     player.color = libtcod.dark_red
+
+
+def render_bar(x, y, total_width, name, value, maximum, bar_color, back_color):
+    # render a bar (HP, experience, etc). first calculate the width of the bar
+    bar_width = int(float(value) / maximum * total_width)
+
+    # render the background first
+    libtcod.console_set_default_background(g.panel, back_color)
+    libtcod.console_rect(g.panel, x, y, total_width, 1, False, libtcod.BKGND_SCREEN)
+
+    # now render the bar on top
+    libtcod.console_set_default_background(g.panel, bar_color)
+    if bar_width > 0:
+        libtcod.console_rect(g.panel, x, y, bar_width, 1, False, libtcod.BKGND_SCREEN)
+
+    # finally, some centered text with the values
+    libtcod.console_set_default_foreground(g.panel, libtcod.white)
+    libtcod.console_print_ex(g.panel, x + total_width / 2, y, libtcod.BKGND_NONE, libtcod.CENTER,
+                             name + ': ' + str(value) + '/' + str(maximum))
+
+
+
 
 
 fighter_component = o.Fighter(hp=30, defense=2, power=5, death_function=player_death)
@@ -272,6 +309,7 @@ libtcod.console_init_root(g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 'python/libtcod tutor
 libtcod.sys_set_fps(g.LIMIT_FPS)
 
 make_map()
+# create the list of game messages and their colors, starts empty
 
 fov_map = libtcod.map_new(g.MAP_WIDTH, g.MAP_HEIGHT)
 for y in range(g.MAP_HEIGHT):
@@ -280,6 +318,7 @@ for y in range(g.MAP_HEIGHT):
 
 fov_recompute = True
 
+g.message('Welcome stranger! Prepare to die.', libtcod.red)
 while not libtcod.console_is_window_closed():
 
     render_all()
