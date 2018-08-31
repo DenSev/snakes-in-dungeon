@@ -42,6 +42,10 @@ player_y = 23
 #############################################
 
 HEAL_AMOUNT = 4
+LIGHTNING_RANGE = 5
+LIGHTNING_DAMAGE = 20
+CONFUSE_NUM_TURNS = 10
+CONFUSE_RANGE = 8
 
 game_state = 'playing'
 player_action = None

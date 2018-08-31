@@ -277,9 +277,22 @@ def place_items(room):
 
         # only place it if the tile is not blocked
         if not o.is_blocked(x, y, map, objects):
-            # create a healing potion
-            item_component = o.Item(use_function=cast_heal)
-            item = o.Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
+            dice = libtcod.random_get_int(0, 0, 100)
+            if dice < 70:
+                # create a healing potion (70% chance)
+                item_component = o.Item(use_function=cast_heal)
+
+                item = o.Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
+            elif dice < 70 + 15:
+                # create a lightning bolt scroll (15% chance)
+                item_component = o.Item(use_function=cast_lightning)
+
+                item = o.Object(x, y, '#', 'scroll of lightning bolt', libtcod.light_yellow, item=item_component)
+            else:
+                # create a confuse scroll (15% chance)
+                item_component = o.Item(use_function=cast_confuse)
+
+                item = o.Object(x, y, '#', 'scroll of confusion', libtcod.light_yellow, item=item_component)
 
             objects.append(item)
             item.send_to_back(objects)  # items appear below other objects
@@ -412,9 +425,50 @@ def cast_heal():
     player.fighter.heal(g.HEAL_AMOUNT)
 
 
+def cast_lightning():
+    # find closest enemy (inside a maximum range) and damage it
+    monster = closest_monster(g.LIGHTNING_RANGE)
+    if monster is None:  # no enemy found within maximum range
+        g.message('No enemy is close enough to strike.', libtcod.red)
+        return 'cancelled'
+
+    # zap it!
+    g.message('A lighting bolt strikes the ' + monster.name + ' with a loud thunder! The damage is '
+              + str(g.LIGHTNING_DAMAGE) + ' hit points.', libtcod.light_blue)
+    monster.fighter.take_damage(g.LIGHTNING_DAMAGE)
+
+
+def closest_monster(max_range):
+    # find closest enemy, up to a maximum range, and in the player's FOV
+    closest_enemy = None
+    closest_dist = max_range + 1  # start with (slightly more than) maximum range
+
+    for object in objects:
+        if object.fighter and not object == player and libtcod.map_is_in_fov(fov_map, object.x, object.y):
+            # calculate distance between this object and the player
+            dist = player.distance_to(object)
+            if dist < closest_dist:  # it's closer, so remember it
+                closest_enemy = object
+                closest_dist = dist
+    return closest_enemy
+
+
+def cast_confuse():
+    # find closest enemy in-range and confuse it
+    monster = closest_monster(g.CONFUSE_RANGE)
+    if monster is None:  # no enemy found within maximum range
+        g.message('No enemy is close enough to confuse.', libtcod.red)
+        return 'cancelled'
+
+    # replace the monster's AI with a "confused" one; after some turns it will restore the old AI
+    old_ai = monster.ai
+    monster.ai = o.ConfusedMonster(old_ai)
+    monster.ai.owner = monster  # tell the new component who owns it
+    g.message('The eyes of the ' + monster.name + ' look vacant, as he starts to stumble around!', libtcod.light_green)
+
+
 fighter_component = o.Fighter(hp=30, defense=2, power=5, death_function=player_death)
 player = o.Object(0, 0, '@', 'player', libtcod.white, blocks=True, fighter=fighter_component)
-# npc = Object(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', "npc", libtcod.yellow, True)
 objects = [player]
 
 con = libtcod.console_new(g.SCREEN_WIDTH, g.SCREEN_HEIGHT)
@@ -437,8 +491,8 @@ g.message('Welcome stranger! Prepare to die.', libtcod.red)
 while not libtcod.console_is_window_closed():
 
     libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, g.key, g.mouse)
-    #libtcod.sys_wait_for_event(libtcod.EVENT_KEY_PRESS, g.key, g.mouse,True)
-    #libtcod.sys_check_for_event(libtcod.EVENT_MOUSE, g.key, g.mouse)
+    # libtcod.sys_wait_for_event(libtcod.EVENT_KEY_PRESS, g.key, g.mouse,True)
+    # libtcod.sys_check_for_event(libtcod.EVENT_MOUSE, g.key, g.mouse)
 
     render_all()
     libtcod.console_flush()
