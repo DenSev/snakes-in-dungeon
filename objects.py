@@ -26,6 +26,15 @@ class Item:
             if self.use_function() != 'cancelled':
                 g.inventory.remove(self.owner)  # destroy after use, unless it was cancelled for some reason
 
+    def drop(self, player, objects):
+
+        # add to the map and remove from the player's inventory. also, place it at the player's coordinates
+        objects.append(self.owner)
+        g.inventory.remove(self.owner)
+        self.owner.x = player.x
+        self.owner.y = player.y
+        g.message('You dropped a ' + self.owner.name + '.', libtcod.yellow)
+
 
 class Fighter:
     # combat-related properties and methods (monster, player, NPC).
@@ -186,3 +195,13 @@ def monster_death(monster, objects):
     monster.ai = None
     monster.name = 'remains of ' + monster.name
     monster.send_to_back(objects)
+
+
+def player_death(player, objects):
+    # the game ended!
+    g.message('You died!', libtcod.red)
+    g.game_state = 'dead'
+
+    # for added effect, transform the player into a corpse!
+    player.char = '%'
+    player.color = libtcod.dark_red

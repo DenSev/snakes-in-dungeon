@@ -33,22 +33,32 @@ class Tile:
         self.block_sight = block_sight
 
 
+tile_map = None
+fov_map = None
+fov_recompute = None
+objects = None
+player = None
+con = None
+
+
 def create_room(room):
-    global map
+    global tile_map
     # go through the tiles in the rectangle and make them passable
     for x in range(room.x1 + 1, room.x2):
         for y in range(room.y1 + 1, room.y2):
-            map[x][y].blocked = False
-            map[x][y].block_sight = False
+            tile_map[x][y].blocked = False
+            tile_map[x][y].block_sight = False
 
 
 def make_map():
-    global map, player
+    global tile_map, objects
 
     # fill map with "blocked" tiles
-    map = [[Tile(True)
-            for y in range(g.MAP_HEIGHT)]
-           for x in range(g.MAP_WIDTH)]
+    tile_map = [[Tile(True)
+                 for y in range(g.MAP_HEIGHT)]
+                for x in range(g.MAP_WIDTH)]
+
+    objects = [player]
 
     rooms = []
     num_rooms = 0
@@ -108,24 +118,22 @@ def make_map():
 
 
 def create_h_tunnel(x1, x2, y):
-    global map
+    global tile_map
     for x in range(min(x1, x2), max(x1, x2) + 1):
-        map[x][y].blocked = False
-        map[x][y].block_sight = False
+        tile_map[x][y].blocked = False
+        tile_map[x][y].block_sight = False
 
 
 def create_v_tunnel(y1, y2, x):
-    global map
+    global tile_map
     # vertical tunnel
     for y in range(min(y1, y2), max(y1, y2) + 1):
-        map[x][y].blocked = False
-        map[x][y].block_sight = False
+        tile_map[x][y].blocked = False
+        tile_map[x][y].block_sight = False
 
 
 def render_all():
     global fov_map, fov_recompute
-    global color_light_ground, color_light_wall
-    global color_dark_ground, color_dark_wall
 
     if fov_recompute:
         # recompute FOV if needed (the player moved or something)
@@ -137,10 +145,10 @@ def render_all():
             for x in range(g.MAP_WIDTH):
 
                 visible = libtcod.map_is_in_fov(fov_map, x, y)
-                wall = map[x][y].block_sight
+                wall = tile_map[x][y].block_sight
 
                 if not visible:
-                    if map[x][y].explored:
+                    if tile_map[x][y].explored:
                         if wall:
                             libtcod.console_set_char_background(con, x, y, g.color_dark_wall, libtcod.BKGND_SET)
                         else:
@@ -151,7 +159,7 @@ def render_all():
                         libtcod.console_set_char_background(con, x, y, g.color_light_wall, libtcod.BKGND_SET)
                     else:
                         libtcod.console_set_char_background(con, x, y, g.color_light_ground, libtcod.BKGND_SET)
-                    map[x][y].explored = True
+                    tile_map[x][y].explored = True
 
     # draw all objects in the list
     for object in objects:
@@ -186,7 +194,6 @@ def render_all():
 
 
 def handle_keys():
-    global player_x, player_y
     global fov_recompute
 
     # key = libtcod.console_check_for_keypress()  #real-time
@@ -233,7 +240,7 @@ def handle_keys():
                 # show the inventory; if an item is selected, drop it
                 chosen_item = inventory_menu('Press the key next to an item to drop it, or any other to cancel.\n')
                 if chosen_item is not None:
-                    chosen_item.drop()
+                    chosen_item.drop(player, objects)
 
             return 'didnt-take-turn'
 
@@ -266,7 +273,7 @@ def place_objects(room):
                                blocks=True, fighter=troll_fighter_component, ai=ai_component)
 
         # only place it if the tile is not blocked
-        if not o.is_blocked(x, y, map, objects):
+        if not o.is_blocked(x, y, tile_map, objects):
             objects.append(monster)
     # place the items
     place_items(room)
@@ -282,7 +289,7 @@ def place_items(room):
         y = libtcod.random_get_int(0, room.y1 + 1, room.y2 - 1)
 
         # only place it if the tile is not blocked
-        if not o.is_blocked(x, y, map, objects):
+        if not o.is_blocked(x, y, tile_map, objects):
             dice = libtcod.random_get_int(0, 0, 100)
             if dice < 70:
                 # create a healing potion (70% chance)
@@ -327,18 +334,8 @@ def player_move_or_attack(dx, dy):
     if target is not None:
         player.fighter.attack(target, objects)
     else:
-        player.move(dx, dy, map, objects)
+        player.move(dx, dy, tile_map, objects)
         fov_recompute = True
-
-
-def player_death(player, objects):
-    # the game ended!
-    g.message('You died!', libtcod.red)
-    g.game_state = 'dead'
-
-    # for added effect, transform the player into a corpse!
-    player.char = '%'
-    player.color = libtcod.dark_red
 
 
 def render_bar(x, y, total_width, name, value, maximum, bar_color, back_color):
@@ -449,21 +446,6 @@ def cast_lightning():
     monster.fighter.take_damage(g.LIGHTNING_DAMAGE, objects)
 
 
-def closest_monster(max_range):
-    # find closest enemy, up to a maximum range, and in the player's FOV
-    closest_enemy = None
-    closest_dist = max_range + 1  # start with (slightly more than) maximum range
-
-    for object in objects:
-        if object.fighter and not object == player and libtcod.map_is_in_fov(fov_map, object.x, object.y):
-            # calculate distance between this object and the player
-            dist = player.distance_to(object)
-            if dist < closest_dist:  # it's closer, so remember it
-                closest_enemy = object
-                closest_dist = dist
-    return closest_enemy
-
-
 def cast_confuse():
     # ask the player for a target to confuse
     g.message('Left-click an enemy to confuse it, or right-click to cancel.', libtcod.light_cyan)
@@ -489,6 +471,21 @@ def cast_fireball():
         if obj.distance(x, y) <= g.FIREBALL_RADIUS and obj.fighter:
             g.message('The ' + obj.name + ' gets burned for ' + str(g.FIREBALL_DAMAGE) + ' hit points.', libtcod.orange)
             obj.fighter.take_damage(g.FIREBALL_DAMAGE, objects)
+
+
+def closest_monster(max_range):
+    # find closest enemy, up to a maximum range, and in the player's FOV
+    closest_enemy = None
+    closest_dist = max_range + 1  # start with (slightly more than) maximum range
+
+    for object in objects:
+        if object.fighter and not object == player and libtcod.map_is_in_fov(fov_map, object.x, object.y):
+            # calculate distance between this object and the player
+            dist = player.distance_to(object)
+            if dist < closest_dist:  # it's closer, so remember it
+                closest_enemy = object
+                closest_dist = dist
+    return closest_enemy
 
 
 def target_tile(max_range=None):
@@ -523,56 +520,68 @@ def target_monster(max_range=None):
                 return obj
 
 
-def drop(self):
-    # add to the map and remove from the player's inventory. also, place it at the player's coordinates
-    objects.append(self.owner)
-    g.inventory.remove(self.owner)
-    self.owner.x = player.x
-    self.owner.y = player.y
-    g.message('You dropped a ' + self.owner.name + '.', libtcod.yellow)
+def new_game():
+    global player, con
+
+    con = libtcod.console_new(g.SCREEN_WIDTH, g.SCREEN_HEIGHT)
+    libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+    libtcod.console_init_root(g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 'python/libtcod tutorial', False)
+    libtcod.sys_set_fps(g.LIMIT_FPS)
+
+    # create object representing the player
+    fighter_component = o.Fighter(hp=30, defense=2, power=5, death_function=o.player_death)
+    player = o.Object(0, 0, '@', 'player', libtcod.white, blocks=True, fighter=fighter_component)
+
+    # generate map (at this point it's not drawn to the screen)
+    make_map()
+    initialize_fov()
+
+    g.game_state = 'playing'
+    g.inventory = []
+
+    # create the list of game messages and their colors, starts empty
+    g.game_msgs = []
+
+    # a warm welcoming message!
+    g.message('Welcome stranger! Prepare to die.', libtcod.red)
 
 
-fighter_component = o.Fighter(hp=30, defense=2, power=5, death_function=player_death)
-player = o.Object(0, 0, '@', 'player', libtcod.white, blocks=True, fighter=fighter_component)
-objects = [player]
+def initialize_fov():
+    global fov_recompute, fov_map
+    fov_recompute = True
 
-con = libtcod.console_new(g.SCREEN_WIDTH, g.SCREEN_HEIGHT)
-libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-libtcod.console_init_root(g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 'python/libtcod tutorial', False)
-libtcod.sys_set_fps(g.LIMIT_FPS)
+    # create the FOV map, according to the generated map
+    fov_map = libtcod.map_new(g.MAP_WIDTH, g.MAP_HEIGHT)
+    for y in range(g.MAP_HEIGHT):
+        for x in range(g.MAP_WIDTH):
+            libtcod.map_set_properties(fov_map, x, y, not tile_map[x][y].block_sight, not tile_map[x][y].blocked)
 
-make_map()
-# create the list of game messages and their colors, starts empty
 
-fov_map = libtcod.map_new(g.MAP_WIDTH, g.MAP_HEIGHT)
-for y in range(g.MAP_HEIGHT):
-    for x in range(g.MAP_WIDTH):
-        libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
+def play_game():
+    player_action = None
 
-fov_recompute = True
+    while not libtcod.console_is_window_closed():
+        # render the screen
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, g.key, g.mouse)
+        render_all()
 
-g.message('Welcome stranger! Prepare to die.', libtcod.red)
+        libtcod.console_flush()
 
-while not libtcod.console_is_window_closed():
+        # erase all objects at their old locations, before they move
+        for object in objects:
+            object.clear(con)
 
-    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, g.key, g.mouse)
-    # libtcod.sys_wait_for_event(libtcod.EVENT_KEY_PRESS, g.key, g.mouse,True)
-    # libtcod.sys_check_for_event(libtcod.EVENT_MOUSE, g.key, g.mouse)
+        # handle keys and exit game if needed
+        player_action = handle_keys()
+        if player_action == 'exit':
+            break
 
-    render_all()
-    libtcod.console_flush()
+        # let monsters take their turn
+        if g.game_state == 'playing' and player_action != 'didnt-take-turn':
+            for object in objects:
+                if object.ai:
+                    object.ai.take_turn(fov_map, player, tile_map, objects)
 
-    # erase all objects at their old locations before they move
-    for obj in objects:
-        obj.clear(con)
 
-    # handle keys and exit game if needed
-    player_action = handle_keys()
-    if player_action == 'exit':
-        break
-
-    # let monsters take their turn
-    if g.game_state == 'playing' and player_action != 'didnt-take-turn':
-        for obj in objects:
-            if obj.ai:
-                obj.ai.take_turn(fov_map, player, map, objects)
+new_game()
+play_game()
