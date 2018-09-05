@@ -46,6 +46,8 @@ LIGHTNING_RANGE = 5
 LIGHTNING_DAMAGE = 20
 CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
+FIREBALL_RADIUS = 3
+FIREBALL_DAMAGE = 12
 
 game_state = 'playing'
 player_action = None
@@ -54,7 +56,6 @@ panel = libtcod.console_new(SCREEN_WIDTH, PANEL_HEIGHT)
 
 mouse = libtcod.Mouse()
 key = libtcod.Key()
-
 
 inventory = []
 

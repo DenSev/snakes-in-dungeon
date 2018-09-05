@@ -229,6 +229,12 @@ def handle_keys():
                 if chosen_item is not None:
                     chosen_item.use()
 
+            if key_char == 'd':
+                # show the inventory; if an item is selected, drop it
+                chosen_item = inventory_menu('Press the key next to an item to drop it, or any other to cancel.\n')
+                if chosen_item is not None:
+                    chosen_item.drop()
+
             return 'didnt-take-turn'
 
 
@@ -283,13 +289,18 @@ def place_items(room):
                 item_component = o.Item(use_function=cast_heal)
 
                 item = o.Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
-            elif dice < 70 + 15:
-                # create a lightning bolt scroll (15% chance)
+            elif dice < 70 + 10:
+                # create a lightning bolt scroll (10% chance)
                 item_component = o.Item(use_function=cast_lightning)
 
                 item = o.Object(x, y, '#', 'scroll of lightning bolt', libtcod.light_yellow, item=item_component)
+            elif dice < 70 + 10 + 10:
+                # create a fireball scroll (10% chance)
+                item_component = o.Item(use_function=cast_fireball)
+
+                item = o.Object(x, y, '#', 'scroll of fireball', libtcod.light_yellow, item=item_component)
             else:
-                # create a confuse scroll (15% chance)
+                # create a confuse scroll (10% chance)
                 item_component = o.Item(use_function=cast_confuse)
 
                 item = o.Object(x, y, '#', 'scroll of confusion', libtcod.light_yellow, item=item_component)
@@ -435,7 +446,7 @@ def cast_lightning():
     # zap it!
     g.message('A lighting bolt strikes the ' + monster.name + ' with a loud thunder! The damage is '
               + str(g.LIGHTNING_DAMAGE) + ' hit points.', libtcod.light_blue)
-    monster.fighter.take_damage(g.LIGHTNING_DAMAGE)
+    monster.fighter.take_damage(g.LIGHTNING_DAMAGE, objects)
 
 
 def closest_monster(max_range):
@@ -454,10 +465,10 @@ def closest_monster(max_range):
 
 
 def cast_confuse():
-    # find closest enemy in-range and confuse it
-    monster = closest_monster(g.CONFUSE_RANGE)
-    if monster is None:  # no enemy found within maximum range
-        g.message('No enemy is close enough to confuse.', libtcod.red)
+    # ask the player for a target to confuse
+    g.message('Left-click an enemy to confuse it, or right-click to cancel.', libtcod.light_cyan)
+    monster = target_monster(g.CONFUSE_RANGE)
+    if monster is None:
         return 'cancelled'
 
     # replace the monster's AI with a "confused" one; after some turns it will restore the old AI
@@ -465,6 +476,60 @@ def cast_confuse():
     monster.ai = o.ConfusedMonster(old_ai)
     monster.ai.owner = monster  # tell the new component who owns it
     g.message('The eyes of the ' + monster.name + ' look vacant, as he starts to stumble around!', libtcod.light_green)
+
+
+def cast_fireball():
+    # ask the player for a target tile to throw a fireball at
+    g.message('Left-click a target tile for the fireball, or right-click to cancel.', libtcod.light_cyan)
+    (x, y) = target_tile()
+    if x is None: return 'cancelled'
+    g.message('The fireball explodes, burning everything within ' + str(g.FIREBALL_RADIUS) + ' tiles!', libtcod.orange)
+
+    for obj in objects:  # damage every fighter in range, including the player
+        if obj.distance(x, y) <= g.FIREBALL_RADIUS and obj.fighter:
+            g.message('The ' + obj.name + ' gets burned for ' + str(g.FIREBALL_DAMAGE) + ' hit points.', libtcod.orange)
+            obj.fighter.take_damage(g.FIREBALL_DAMAGE, objects)
+
+
+def target_tile(max_range=None):
+    # return the position of a tile left-clicked in player's FOV (optionally in a range),
+    # or (None,None) if right-clicked.
+    while True:
+        # render the screen. this erases the inventory and shows the names of objects under the mouse.
+        libtcod.console_flush()
+        libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, g.key, g.mouse)
+        render_all()
+
+        (x, y) = (g.mouse.cx, g.mouse.cy)
+
+        if (g.mouse.lbutton_pressed and libtcod.map_is_in_fov(fov_map, x, y) and
+                (max_range is None or player.distance(x, y) <= max_range)):
+            return x, y
+
+        if g.mouse.rbutton_pressed or g.key.vk == libtcod.KEY_ESCAPE:
+            return None, None  # cancel if the player right-clicked or pressed Escape
+
+
+def target_monster(max_range=None):
+    # returns a clicked monster inside FOV up to a range, or None if right-clicked
+    while True:
+        (x, y) = target_tile(max_range)
+        if x is None:  # player cancelled
+            return None
+
+        # return the first clicked monster, otherwise continue looping
+        for obj in objects:
+            if obj.x == x and obj.y == y and obj.fighter and obj != player:
+                return obj
+
+
+def drop(self):
+    # add to the map and remove from the player's inventory. also, place it at the player's coordinates
+    objects.append(self.owner)
+    g.inventory.remove(self.owner)
+    self.owner.x = player.x
+    self.owner.y = player.y
+    g.message('You dropped a ' + self.owner.name + '.', libtcod.yellow)
 
 
 fighter_component = o.Fighter(hp=30, defense=2, power=5, death_function=player_death)

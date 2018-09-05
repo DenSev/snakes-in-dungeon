@@ -90,7 +90,7 @@ class ConfusedMonster:
         self.old_ai = old_ai
         self.num_turns = num_turns
 
-    def take_turn(self):
+    def take_turn(self, fov_map, player, map, objects):
         if self.num_turns > 0:  # still confused...
             # move in a random direction, and decrease the number of turns confused
             self.owner.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
@@ -99,7 +99,6 @@ class ConfusedMonster:
         else:  # restore the previous AI (this one will be deleted because it's not referenced anymore)
             self.owner.ai = self.old_ai
             g.message('The ' + self.owner.name + ' is no longer confused!', libtcod.red)
-
 
 
 class Object:
@@ -120,6 +119,10 @@ class Object:
         self.item = item
         if self.item:  # let the Item component know who owns it
             self.item.owner = self
+
+    def distance(self, x, y):
+        # return the distance to some coordinates
+        return math.sqrt((x - self.x) ** 2 + (y - self.y) ** 2)
 
     def send_to_back(self, objects):
         # make this object be drawn first, so all others appear above it if they're in the same tile.
