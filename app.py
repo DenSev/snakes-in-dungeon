@@ -380,20 +380,21 @@ def main_menu():
     libtcod.console_init_root(g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 'python/libtcod tutorial', False)
     libtcod.sys_set_fps(g.LIMIT_FPS)
 
-    # show the game's title, and some credits!
-    libtcod.console_set_default_foreground(0, libtcod.light_yellow)
-    libtcod.console_print_ex(0, g.SCREEN_WIDTH / 2, g.SCREEN_HEIGHT / 2 - 4, libtcod.BKGND_NONE, libtcod.CENTER,
-                             'SNAKES IN THE DUNGEON')
-    libtcod.console_print_ex(0, g.SCREEN_WIDTH / 2, g.SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.CENTER,
-                             'by whothefuckcares')
-
     img = libtcod.image_load('menu_background1.png')
 
     # show the background image, at twice the regular console resolution
-    libtcod.image_blit_2x(img, 0, 0, 0)
+
     while not libtcod.console_is_window_closed():
         # show the background image, at twice the regular console resolution
         libtcod.image_blit_2x(img, 0, 0, 0)
+
+        # show the game's title, and some credits!
+        libtcod.console_set_default_foreground(0, libtcod.light_yellow)
+        libtcod.console_print_ex(0, g.SCREEN_WIDTH / 2, g.SCREEN_HEIGHT / 2 - 4, libtcod.BKGND_NONE, libtcod.CENTER,
+                                 'SNAKES IN THE DUNGEON')
+        libtcod.console_print_ex(0, g.SCREEN_WIDTH / 2, g.SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.CENTER,
+                                 'by whothefuckcares')
+
 
         # show options and wait for the player's choice
         choice = menu('', ['Play a new game', 'Continue last game', 'Quit'], 24)
