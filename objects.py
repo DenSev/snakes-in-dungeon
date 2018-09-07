@@ -102,7 +102,7 @@ class ConfusedMonster:
     def take_turn(self, fov_map, player, map, objects):
         if self.num_turns > 0:  # still confused...
             # move in a random direction, and decrease the number of turns confused
-            self.owner.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1))
+            self.owner.move(libtcod.random_get_int(0, -1, 1), libtcod.random_get_int(0, -1, 1), map, objects)
             self.num_turns -= 1
 
         else:  # restore the previous AI (this one will be deleted because it's not referenced anymore)

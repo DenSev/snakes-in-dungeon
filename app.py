@@ -1,3 +1,5 @@
+import shelve
+
 import libtcodpy as libtcod
 import objects as o
 import globals as g
@@ -39,6 +41,7 @@ fov_recompute = None
 objects = None
 player = None
 con = None
+MAX_OPTIONS = 26
 
 
 def create_room(room):
@@ -369,11 +372,60 @@ def get_names_under_mouse():
     return names.capitalize()
 
 
+def main_menu():
+    global con
+
+    con = libtcod.console_new(g.SCREEN_WIDTH, g.SCREEN_HEIGHT)
+    libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
+    libtcod.console_init_root(g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 'python/libtcod tutorial', False)
+    libtcod.sys_set_fps(g.LIMIT_FPS)
+
+    # show the game's title, and some credits!
+    libtcod.console_set_default_foreground(0, libtcod.light_yellow)
+    libtcod.console_print_ex(0, g.SCREEN_WIDTH / 2, g.SCREEN_HEIGHT / 2 - 4, libtcod.BKGND_NONE, libtcod.CENTER,
+                             'SNAKES IN THE DUNGEON')
+    libtcod.console_print_ex(0, g.SCREEN_WIDTH / 2, g.SCREEN_HEIGHT - 2, libtcod.BKGND_NONE, libtcod.CENTER,
+                             'by whothefuckcares')
+
+    img = libtcod.image_load('menu_background1.png')
+
+    # show the background image, at twice the regular console resolution
+    libtcod.image_blit_2x(img, 0, 0, 0)
+    while not libtcod.console_is_window_closed():
+        # show the background image, at twice the regular console resolution
+        libtcod.image_blit_2x(img, 0, 0, 0)
+
+        # show options and wait for the player's choice
+        choice = menu('', ['Play a new game', 'Continue last game', 'Quit'], 24)
+
+        if choice == 0:  # new game
+            new_game()
+            play_game()
+        if choice == 1:  # load last game
+            try:
+                load_game()
+            except:
+                msgbox('\n No saved game to load.\n', 24)
+                continue
+            play_game()
+        elif choice == 2:  # quit
+            break
+
+
+def msgbox(text, width=50):
+    menu(text, [], width)  # use menu() as a sort of "message box"
+
+
 def menu(header, options, width):
-    if len(options) > 26: raise ValueError('Cannot have a menu with more than 26 options.')
+    if len(options) > MAX_OPTIONS:
+        raise ValueError('Cannot have a menu with more than 26 options.')
 
     # calculate total height for the header (after auto-wrap) and one line per option
     header_height = libtcod.console_get_height_rect(con, 0, 0, width, g.SCREEN_HEIGHT, header)
+
+    if header == '':
+        header_height = 0
+
     height = len(options) + header_height
 
     # create an off-screen console that represents the menu's window
@@ -400,6 +452,9 @@ def menu(header, options, width):
     # present the root console to the player and wait for a key-press
     libtcod.console_flush()
     g.key = libtcod.console_wait_for_keypress(True)
+
+    if g.key.vk == libtcod.KEY_ENTER and g.key.lalt:  # (special case) Alt+Enter: toggle fullscreen
+        libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
 
     index = g.key.c - ord('a')
     if 0 <= index < len(options):
@@ -523,11 +578,6 @@ def target_monster(max_range=None):
 def new_game():
     global player, con
 
-    con = libtcod.console_new(g.SCREEN_WIDTH, g.SCREEN_HEIGHT)
-    libtcod.console_set_custom_font('arial10x10.png', libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-    libtcod.console_init_root(g.SCREEN_WIDTH, g.SCREEN_HEIGHT, 'python/libtcod tutorial', False)
-    libtcod.sys_set_fps(g.LIMIT_FPS)
-
     # create object representing the player
     fighter_component = o.Fighter(hp=30, defense=2, power=5, death_function=o.player_death)
     player = o.Object(0, 0, '@', 'player', libtcod.white, blocks=True, fighter=fighter_component)
@@ -549,6 +599,7 @@ def new_game():
 def initialize_fov():
     global fov_recompute, fov_map
     fov_recompute = True
+    libtcod.console_clear(con)  # unexplored areas start black (which is the default background color)
 
     # create the FOV map, according to the generated map
     fov_map = libtcod.map_new(g.MAP_WIDTH, g.MAP_HEIGHT)
@@ -557,10 +608,44 @@ def initialize_fov():
             libtcod.map_set_properties(fov_map, x, y, not tile_map[x][y].block_sight, not tile_map[x][y].blocked)
 
 
+def save_game():
+    # open a new empty shelve (possibly overwriting an old one) to write the game data
+    file = shelve.open('savegame', 'n')
+    file['map'] = tile_map
+    file['objects'] = objects
+    file['player_index'] = objects.index(player)
+    file['inventory'] = g.inventory
+    file['game_msgs'] = g.game_msgs
+    file['game_state'] = g.game_state
+
+    file.close()
+
+
+def load_game():
+    # open the previously saved shelve and load the game data
+    global tile_map, objects, player
+
+    file = shelve.open('savegame', 'r')
+    tile_map = file['map']
+    objects = file['objects']
+    player = objects[file['player_index']]  # get index of player in objects list and access it
+    g.inventory = file['inventory']
+    g.game_msgs = file['game_msgs']
+    g.game_state = file['game_state']
+    file.close()
+
+    initialize_fov()
+
+
 def play_game():
     player_action = None
+    counter = 1
 
     while not libtcod.console_is_window_closed():
+        counter += 1
+
+        if counter % 100 == 0:
+            print counter
         # render the screen
         libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, g.key, g.mouse)
         render_all()
@@ -574,6 +659,7 @@ def play_game():
         # handle keys and exit game if needed
         player_action = handle_keys()
         if player_action == 'exit':
+            save_game()
             break
 
         # let monsters take their turn
@@ -583,5 +669,4 @@ def play_game():
                     object.ai.take_turn(fov_map, player, tile_map, objects)
 
 
-new_game()
-play_game()
+main_menu()
