@@ -38,14 +38,15 @@ class Item:
 
 class Fighter:
     # combat-related properties and methods (monster, player, NPC).
-    def __init__(self, hp, defense, power, death_function=None):
+    def __init__(self, hp, defense, power, xp, death_function=None):
+        self.xp = xp
         self.death_function = death_function
         self.max_hp = hp
         self.hp = hp
         self.defense = defense
         self.power = power
 
-    def take_damage(self, damage, objects):
+    def take_damage(self, damage, objects, player):
         # apply damage if possible
         if damage > 0:
             self.hp -= damage
@@ -54,6 +55,8 @@ class Fighter:
                 function = self.death_function
                 if function is not None:
                     function(self.owner, objects)
+                    if self.owner != player:  # yield experience to the player
+                        player.fighter.xp += self.xp
 
     def heal(self, amount):
         # heal by the given amount, without going over the maximum
@@ -61,14 +64,14 @@ class Fighter:
         if self.hp > self.max_hp:
             self.hp = self.max_hp
 
-    def attack(self, target, objects):
+    def attack(self, target, objects, player):
         # a simple formula for attack damage
         damage = self.power - target.fighter.defense
 
         if damage > 0:
             # make the target take some damage
             g.message(self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage) + ' hit points.')
-            target.fighter.take_damage(damage, objects)
+            target.fighter.take_damage(damage, objects, player)
         else:
             g.message(self.owner.name.capitalize() + ' attacks ' + target.name + ' but it has no effect!')
 
@@ -90,7 +93,7 @@ class BasicMonster:
 
             # close enough, attack! (if the player is still alive.)
             elif player.fighter.hp > 0:
-                monster.fighter.attack(player, objects)
+                monster.fighter.attack(player, objects, player)
 
 
 class ConfusedMonster:
@@ -112,7 +115,9 @@ class ConfusedMonster:
 
 class Object:
 
-    def __init__(self, x, y, char, name, color, blocks=False, fighter=None, ai=None, item=None):
+    def __init__(self, x, y, char, name, color, blocks=False, always_visible=False, fighter=None, ai=None, item=None,
+                 level=1):
+        self.always_visible = always_visible
         self.x = x
         self.y = y
         self.char = char
@@ -128,6 +133,7 @@ class Object:
         self.item = item
         if self.item:  # let the Item component know who owns it
             self.item.owner = self
+        self.level = level
 
     def distance(self, x, y):
         # return the distance to some coordinates
@@ -156,8 +162,9 @@ class Object:
             self.x += dx
             self.y += dy
 
-    def draw(self, fov_map, con):
-        if libtcod.map_is_in_fov(fov_map, self.x, self.y):
+    def draw(self, fov_map, tile_map, con):
+        if (libtcod.map_is_in_fov(fov_map, self.x, self.y) or
+                (self.always_visible and tile_map[self.x][self.y].explored)):
             libtcod.console_set_default_foreground(con, self.color)
             libtcod.console_put_char(con, self.x, self.y, self.char, libtcod.BKGND_NONE)
 
@@ -187,6 +194,8 @@ def is_blocked(x, y, map, objects):
 def monster_death(monster, objects):
     # transform it into a nasty corpse! it doesn't block, can't be
     # attacked and doesn't move
+    g.message('The ' + monster.name + ' is dead! You gain ' + str(monster.fighter.xp) + ' experience points.',
+              libtcod.orange)
     g.message(monster.name.capitalize() + ' is dead!')
     monster.char = '%'
     monster.color = libtcod.dark_red

@@ -4,6 +4,9 @@ import textwrap
 #############################################
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
+LEVEL_SCREEN_WIDTH = 40
+CHARACTER_SCREEN_WIDTH = 30
+
 # sizes and coordinates relevant for the GUI
 BAR_WIDTH = 20
 PANEL_HEIGHT = 7
@@ -48,6 +51,10 @@ CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 FIREBALL_RADIUS = 3
 FIREBALL_DAMAGE = 12
+
+# experience and level-ups
+LEVEL_UP_BASE = 100
+LEVEL_UP_FACTOR = 100
 
 game_state = 'playing'
 player_action = None
