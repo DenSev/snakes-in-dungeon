@@ -317,6 +317,9 @@ def check_level_up():
 
 
 def place_objects(room):
+    monster_chances = {'orc': 80, 'troll': 20}
+    monster_creators = {'orc': o.create_orc, 'troll': o.create_troll}
+
     # choose random number of monsters
     num_monsters = libtcod.random_get_int(0, 0, g.MAX_ROOM_MONSTERS)
 
@@ -325,23 +328,8 @@ def place_objects(room):
         x = libtcod.random_get_int(0, room.x1 + 1, room.x2 - 1)
         y = libtcod.random_get_int(0, room.y1 + 1, room.y2 - 1)
 
-        # item_component = o.Item()
-        # item = o.Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
-
-        if libtcod.random_get_int(0, 0, 100) < 80:  # 80% chance of getting an orc
-            # create an orc
-            orc_fighter_component = o.Fighter(hp=10, defense=0, power=3, death_function=o.monster_death, xp=35)
-            ai_component = o.BasicMonster()
-
-            monster = o.Object(x, y, 'o', 'orc', libtcod.desaturated_green,
-                               blocks=True, fighter=orc_fighter_component, ai=ai_component)
-        else:
-            # create a troll
-            troll_fighter_component = o.Fighter(hp=16, defense=1, power=4, death_function=o.monster_death, xp=100)
-            ai_component = o.BasicMonster()
-
-            monster = o.Object(x, y, 'T', 'troll', libtcod.darker_green,
-                               blocks=True, fighter=troll_fighter_component, ai=ai_component)
+        choice = random_choice(monster_chances)
+        monster = monster_creators[choice](x, y)
 
         # only place it if the tile is not blocked
         if not o.is_blocked(x, y, tile_map, objects):
@@ -351,6 +339,20 @@ def place_objects(room):
 
 
 def place_items(room):
+    item_chances = {'heal': 70, 'lightning': 10, 'fireball': 10, 'confuse': 10}
+    item_creators = {
+        'heal': o.create_heal_potion,
+        'lightning': o.create_lightning_scroll,
+        'fireball': o.create_fireball_scroll,
+        'confuse': o.create_confuse_scroll
+    }
+    item_uses = {
+        'heal': cast_heal,
+        'lightning': cast_lightning,
+        'fireball': cast_fireball,
+        'confuse': cast_confuse
+    }
+
     # choose random number of items
     num_items = libtcod.random_get_int(0, 0, g.MAX_ROOM_ITEMS)
 
@@ -361,30 +363,36 @@ def place_items(room):
 
         # only place it if the tile is not blocked
         if not o.is_blocked(x, y, tile_map, objects):
-            dice = libtcod.random_get_int(0, 0, 100)
-            if dice < 70:
-                # create a healing potion (70% chance)
-                item_component = o.Item(use_function=cast_heal)
-
-                item = o.Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
-            elif dice < 70 + 10:
-                # create a lightning bolt scroll (10% chance)
-                item_component = o.Item(use_function=cast_lightning)
-
-                item = o.Object(x, y, '#', 'scroll of lightning bolt', libtcod.light_yellow, item=item_component)
-            elif dice < 70 + 10 + 10:
-                # create a fireball scroll (10% chance)
-                item_component = o.Item(use_function=cast_fireball)
-
-                item = o.Object(x, y, '#', 'scroll of fireball', libtcod.light_yellow, item=item_component)
-            else:
-                # create a confuse scroll (10% chance)
-                item_component = o.Item(use_function=cast_confuse)
-
-                item = o.Object(x, y, '#', 'scroll of confusion', libtcod.light_yellow, item=item_component)
+            choice = random_choice(item_chances)
+            item = item_creators[choice](x, y, item_uses[choice])
 
             objects.append(item)
             item.send_to_back(objects)  # items appear below other objects
+
+
+def random_choice(chances_dict):
+    # choose one option from dictionary of chances, returning its key
+    chances = chances_dict.values()
+    strings = chances_dict.keys()
+
+    return strings[random_choice_index(chances)]
+
+
+def random_choice_index(chances):
+    # choose one option from list of chances, returning its index
+    # the dice will land on some number between 1 and the sum of the chances
+    dice = libtcod.random_get_int(0, 1, sum(chances))
+
+    # go through all chances, keeping the sum so far
+    running_sum = 0
+    choice = 0
+    for w in chances:
+        running_sum += w
+
+        # see if the dice landed in the part that corresponds to this choice
+        if dice <= running_sum:
+            return choice
+        choice += 1
 
 
 def player_move_or_attack(dx, dy):

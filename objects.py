@@ -214,3 +214,47 @@ def player_death(player, objects):
     # for added effect, transform the player into a corpse!
     player.char = '%'
     player.color = libtcod.dark_red
+
+
+def create_orc(x, y):
+    orc_fighter_component = Fighter(hp=10, defense=0, power=3, death_function=monster_death, xp=35)
+    ai_component = BasicMonster()
+
+    monster = Object(x, y, 'o', 'orc', libtcod.desaturated_green,
+                     blocks=True, fighter=orc_fighter_component, ai=ai_component)
+
+    return monster
+
+
+def create_troll(x, y):
+    troll_fighter_component = Fighter(hp=16, defense=1, power=4, death_function=monster_death, xp=100)
+    ai_component = BasicMonster()
+
+    monster = Object(x, y, 'T', 'troll', libtcod.darker_green,
+                     blocks=True, fighter=troll_fighter_component, ai=ai_component)
+
+    return monster
+
+
+def create_heal_potion(x, y, use_function):
+    item_component = Item(use_function=use_function)
+    item = Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
+    return item
+
+
+def create_fireball_scroll(x, y, use_function):
+    item_component = Item(use_function=use_function)
+    item = Object(x, y, '#', 'scroll of fireball', libtcod.light_yellow, item=item_component)
+    return item
+
+
+def create_lightning_scroll(x, y, use_function):
+    item_component = Item(use_function=use_function)
+    item = Object(x, y, '#', 'scroll of lightning bolt', libtcod.light_yellow, item=item_component)
+    return item
+
+
+def create_confuse_scroll(x, y, use_function):
+    item_component = Item(use_function=use_function)
+    item = Object(x, y, '#', 'scroll of confusion', libtcod.light_yellow, item=item_component)
+    return item
