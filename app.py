@@ -194,7 +194,7 @@ def render_all():
         y += 1
 
     # show the player's stats
-    render_bar(1, 1, g.BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp,
+    render_bar(1, 1, g.BAR_WIDTH, 'HP', player.fighter.hp, player.fighter.max_hp(player),
                libtcod.light_red, libtcod.darker_red)
 
     # display names of objects under the mouse
@@ -206,11 +206,16 @@ def render_all():
     libtcod.console_blit(g.panel, 0, 0, g.SCREEN_WIDTH, g.PANEL_HEIGHT, 0, 0, g.PANEL_Y)
 
 
+def from_dungeon_level(table):
+    # returns a value that depends on level. the table specifies what value occurs after each level, default is 0.
+    for (value, level) in reversed(table):
+        if dungeon_level >= level:
+            return value
+    return 0
+
+
 def handle_keys():
     global fov_recompute, stairs
-
-    # key = libtcod.console_check_for_keypress()  #real-time
-    # key = libtcod.console_wait_for_keypress(True)  # turn-based
 
     if g.key.vk == libtcod.KEY_ENTER and g.key.lalt:
         # Alt+Enter: toggle fullscreen
@@ -262,7 +267,7 @@ def handle_keys():
                 if chosen_item is not None:
                     chosen_item.drop(player, objects)
 
-            if key_char == '<':
+            if key_char == 'u':
                 # go down stairs, if the player is on them
                 if stairs.x == player.x and stairs.y == player.y:
                     next_level()
@@ -272,8 +277,10 @@ def handle_keys():
                 level_up_xp = g.LEVEL_UP_BASE + (player.level - 1) * g.LEVEL_UP_FACTOR
                 msgbox(
                     'Character Information\n\nLevel: ' + str(player.level) + '\nExperience: ' + str(player.fighter.xp) +
-                    '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(player.fighter.max_hp) +
-                    '\nAttack: ' + str(player.fighter.power) + '\nDefense: ' + str(player.fighter.defense),
+                    '\nExperience to level up: ' + str(level_up_xp) + '\n\nMaximum HP: ' + str(
+                        player.fighter.max_hp(player)) +
+                    '\nAttack: ' + str(player.fighter.power(player)) + '\nDefense: ' + str(
+                        player.fighter.defense(player)),
                     g.CHARACTER_SCREEN_WIDTH)
 
             return 'didnt-take-turn'
@@ -283,7 +290,7 @@ def next_level():
     global dungeon_level
     # advance to the next level
     g.message('You take a moment to rest, and recover your strength.', libtcod.light_violet)
-    player.fighter.heal(player.fighter.max_hp / 2)  # heal the player by 50%
+    player.fighter.heal(player.fighter.max_hp(player) / 2, player)  # heal the player by 50%
 
     g.message('After a rare moment of peace, you descend deeper into the heart of the dungeon...', libtcod.red)
     make_map()  # create a fresh new level!
@@ -303,25 +310,35 @@ def check_level_up():
         choice = None
         while choice is None:  # keep asking until a choice is made
             choice = menu('Level up! Choose a stat to raise:\n',
-                          ['Constitution (+20 HP, from ' + str(player.fighter.max_hp) + ')',
-                           'Strength (+1 attack, from ' + str(player.fighter.power) + ')',
-                           'Agility (+1 defense, from ' + str(player.fighter.defense) + ')'], g.LEVEL_SCREEN_WIDTH)
+                          ['Constitution (+20 HP, from ' + str(player.fighter.max_hp(player)) + ')',
+                           'Strength (+1 attack, from ' + str(player.fighter.power(player)) + ')',
+                           'Agility (+1 defense, from ' + str(player.fighter.defense(player)) + ')'],
+                          g.LEVEL_SCREEN_WIDTH)
 
         if choice == 0:
-            player.fighter.max_hp += 20
+            player.fighter.base_max_hp += 20
             player.fighter.hp += 20
         elif choice == 1:
-            player.fighter.power += 1
+            player.fighter.base_power += 1
         elif choice == 2:
-            player.fighter.defense += 1
+            player.fighter.base_defense += 1
 
 
 def place_objects(room):
-    monster_chances = {'orc': 80, 'troll': 20}
+    # maximum number of monsters per room
+    max_monsters = from_dungeon_level([[2, 1], [3, 4], [5, 6]])
+
+    # chance of each monster
+    monster_chances = {
+        'orc': 80,
+        'troll': from_dungeon_level([[15, 3], [30, 5], [60, 7]])
+    }
+
+    # monster_chances = {'orc': 80, 'troll': 20}
     monster_creators = {'orc': o.create_orc, 'troll': o.create_troll}
 
     # choose random number of monsters
-    num_monsters = libtcod.random_get_int(0, 0, g.MAX_ROOM_MONSTERS)
+    num_monsters = libtcod.random_get_int(0, 0, max_monsters)
 
     for i in range(num_monsters):
         # choose random spot for this monster
@@ -339,22 +356,39 @@ def place_objects(room):
 
 
 def place_items(room):
-    item_chances = {'heal': 70, 'lightning': 10, 'fireball': 10, 'confuse': 10}
+    # maximum number of items per room
+    max_items = from_dungeon_level([[1, 1], [2, 4]])
+
+    # chance of each item (by default they have a chance of 0 at level 1, which then goes up)
+    item_chances = {
+        'heal': 35,
+        'lightning': from_dungeon_level([[25, 4]]),
+        'fireball': from_dungeon_level([[25, 6]]),
+        'confuse': from_dungeon_level([[10, 2]]),
+        'sword': from_dungeon_level([[5, 4]]),
+        'shield': from_dungeon_level([[15, 8]])
+    }
+
+    # item_chances = {'heal': 70, 'lightning': 10, 'fireball': 10, 'confuse': 10}
     item_creators = {
         'heal': o.create_heal_potion,
         'lightning': o.create_lightning_scroll,
         'fireball': o.create_fireball_scroll,
-        'confuse': o.create_confuse_scroll
+        'confuse': o.create_confuse_scroll,
+        'sword': o.place_sword,
+        'shield': o.place_shield
     }
     item_uses = {
         'heal': cast_heal,
         'lightning': cast_lightning,
         'fireball': cast_fireball,
-        'confuse': cast_confuse
+        'confuse': cast_confuse,
+        'sword': None,
+        'shield': None
     }
 
     # choose random number of items
-    num_items = libtcod.random_get_int(0, 0, g.MAX_ROOM_ITEMS)
+    num_items = libtcod.random_get_int(0, 0, max_items)
 
     for i in range(num_items):
         # choose random spot for this item
@@ -543,7 +577,16 @@ def inventory_menu(header):
     if len(g.inventory) == 0:
         options = ['Inventory is empty.']
     else:
-        options = [item.name for item in g.inventory]
+
+        options = []
+        for item in g.inventory:
+            text = item.name
+            # show additional information, in case it's equipped
+            if item.equipment and item.equipment.is_equipped:
+                text = text + ' (on ' + item.equipment.slot + ')'
+            options.append(text)
+
+        # options = [item.name for item in g.inventory]
 
     index = menu(header, options, g.INVENTORY_WIDTH)
     # convert the ASCII code to an index; if it corresponds to an option, return it
@@ -556,12 +599,12 @@ def inventory_menu(header):
 
 def cast_heal():
     # heal the player
-    if player.fighter.hp == player.fighter.max_hp:
+    if player.fighter.hp == player.fighter.max_hp(player):
         g.message('You are already at full health.', libtcod.red)
         return 'cancelled'
 
     g.message('Your wounds start to feel better!', libtcod.light_violet)
-    player.fighter.heal(g.HEAL_AMOUNT)
+    player.fighter.heal(g.HEAL_AMOUNT, player)
 
 
 def cast_lightning():
@@ -670,6 +713,13 @@ def new_game():
 
     # create the list of game messages and their colors, starts empty
     g.game_msgs = []
+
+    # initial equipment: a dagger
+    equipment_component = o.Equipment(slot='right hand', power_bonus=2)
+    obj = o.Object(0, 0, '-', 'dagger', libtcod.sky, equipment=equipment_component)
+    g.inventory.append(obj)
+    equipment_component.equip()
+    obj.always_visible = True
 
     # a warm welcoming message!
     g.message('Welcome stranger! Prepare to die.', libtcod.red)

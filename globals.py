@@ -37,20 +37,17 @@ FOV_LIGHT_WALLS = True
 TORCH_RADIUS = 10
 
 #############################################
-MAX_ROOM_MONSTERS = 3
-MAX_ROOM_ITEMS = 2
-
 player_x = 25
 player_y = 23
 #############################################
 
-HEAL_AMOUNT = 4
-LIGHTNING_RANGE = 5
+HEAL_AMOUNT = 40
+LIGHTNING_RANGE = 40
 LIGHTNING_DAMAGE = 20
 CONFUSE_NUM_TURNS = 10
 CONFUSE_RANGE = 8
 FIREBALL_RADIUS = 3
-FIREBALL_DAMAGE = 12
+FIREBALL_DAMAGE = 25
 
 # experience and level-ups
 LEVEL_UP_BASE = 100
